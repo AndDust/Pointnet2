@@ -212,7 +212,7 @@ def main(args):
 
             if (instance_acc >= best_instance_acc):
                 logger.info('Save model...')
-                savepath = str(checkpoints_dir) + '/best_model.pth'
+                savepath = str(checkpoints_dir) + '/best_model_reorganized.pth'
                 log_string('Saving at %s' % savepath)
                 state = {
                     'epoch': best_epoch,
