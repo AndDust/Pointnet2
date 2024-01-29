@@ -164,13 +164,23 @@ class PointNetSetAbstraction(nn.Module):
         self.npoint = npoint
         self.radius = radius
         self.nsample = nsample
-        self.mlp_convs = nn.ModuleList()
-        self.mlp_bns = nn.ModuleList()
+        # self.mlp_convs = nn.ModuleList()
+        # self.mlp_bns = nn.ModuleList()
         last_channel = in_channel
+        self.mlp_layers = nn.ModuleList()  # 新建一个ModuleList用于存放卷积和BN层
+
+        # for out_channel in mlp:
+        #     self.mlp_convs.append(nn.Conv2d(last_channel, out_channel, 1))
+        #     self.mlp_bns.append(nn.BatchNorm2d(out_channel))
+        #     last_channel = out_channel
         for out_channel in mlp:
-            self.mlp_convs.append(nn.Conv2d(last_channel, out_channel, 1))
-            self.mlp_bns.append(nn.BatchNorm2d(out_channel))
+            self.mlp_layers.append(nn.Sequential(
+                nn.Conv2d(last_channel, out_channel, 1),
+                nn.BatchNorm2d(out_channel),
+                nn.ReLU(inplace=True)  # 在同一个模块中直接添加ReLU激活函数
+            ))
             last_channel = out_channel
+
         self.group_all = group_all
 
     def forward(self, xyz, points):
@@ -193,9 +203,13 @@ class PointNetSetAbstraction(nn.Module):
         # new_xyz: sampled points position data, [B, npoint, C]
         # new_points: sampled points data, [B, npoint, nsample, C+D]
         new_points = new_points.permute(0, 3, 2, 1) # [B, C+D, nsample,npoint]
-        for i, conv in enumerate(self.mlp_convs):
-            bn = self.mlp_bns[i]
-            new_points =  F.relu(bn(conv(new_points)))
+
+        # for i, conv in enumerate(self.mlp_convs):
+        #     bn = self.mlp_bns[i]
+        #     new_points =  F.relu(bn(conv(new_points)))
+        # 在forward中按顺序应用MLP层
+        for mlp_layer in self.mlp_layers:
+            new_points = mlp_layer(new_points)
 
         new_points = torch.max(new_points, 2)[0]
         new_xyz = new_xyz.permute(0, 2, 1)
@@ -210,16 +224,27 @@ class PointNetSetAbstractionMsg(nn.Module):
         self.nsample_list = nsample_list
         self.conv_blocks = nn.ModuleList()
         self.bn_blocks = nn.ModuleList()
+        # for i in range(len(mlp_list)):
+        #     convs = nn.ModuleList()
+        #     bns = nn.ModuleList()
+        #     last_channel = in_channel + 3
+        #     for out_channel in mlp_list[i]:
+        #         convs.append(nn.Conv2d(last_channel, out_channel, 1))
+        #         bns.append(nn.BatchNorm2d(out_channel))
+        #         last_channel = out_channel
+        #     self.conv_blocks.append(convs)
+        #     self.bn_blocks.append(bns)
         for i in range(len(mlp_list)):
-            convs = nn.ModuleList()
-            bns = nn.ModuleList()
+            conv_bn_blocks = nn.ModuleList()
             last_channel = in_channel + 3
             for out_channel in mlp_list[i]:
-                convs.append(nn.Conv2d(last_channel, out_channel, 1))
-                bns.append(nn.BatchNorm2d(out_channel))
+                conv_bn_blocks.append(nn.Sequential(
+                    nn.Conv2d(last_channel, out_channel, 1),
+                    nn.BatchNorm2d(out_channel),
+                    nn.ReLU(inplace=True)  # 在同一个模块中直接添加ReLU激活函数
+                ))
                 last_channel = out_channel
-            self.conv_blocks.append(convs)
-            self.bn_blocks.append(bns)
+            self.conv_blocks.append(conv_bn_blocks)
 
     def forward(self, xyz, points):
         """
@@ -250,10 +275,14 @@ class PointNetSetAbstractionMsg(nn.Module):
                 grouped_points = grouped_xyz
 
             grouped_points = grouped_points.permute(0, 3, 2, 1)  # [B, D, K, S]
-            for j in range(len(self.conv_blocks[i])):
-                conv = self.conv_blocks[i][j]
-                bn = self.bn_blocks[i][j]
-                grouped_points =  F.relu(bn(conv(grouped_points)))
+
+            # for j in range(len(self.conv_blocks[i])):
+            #     conv = self.conv_blocks[i][j]
+            #     bn = self.bn_blocks[i][j]
+            #     grouped_points =  F.relu(bn(conv(grouped_points)))
+            for conv_bn_block in self.conv_blocks[i]:
+                grouped_points = conv_bn_block(grouped_points)
+
             new_points = torch.max(grouped_points, 2)[0]  # [B, D', S]
             new_points_list.append(new_points)
 
@@ -265,12 +294,21 @@ class PointNetSetAbstractionMsg(nn.Module):
 class PointNetFeaturePropagation(nn.Module):
     def __init__(self, in_channel, mlp):
         super(PointNetFeaturePropagation, self).__init__()
-        self.mlp_convs = nn.ModuleList()
-        self.mlp_bns = nn.ModuleList()
+        # self.mlp_convs = nn.ModuleList()
+        # self.mlp_bns = nn.ModuleList()
+        self.mlp_layers = nn.ModuleList()
         last_channel = in_channel
+        # for out_channel in mlp:
+        #     self.mlp_convs.append(nn.Conv1d(last_channel, out_channel, 1))
+        #     self.mlp_bns.append(nn.BatchNorm1d(out_channel))
+        #     last_channel = out_channel
+
         for out_channel in mlp:
-            self.mlp_convs.append(nn.Conv1d(last_channel, out_channel, 1))
-            self.mlp_bns.append(nn.BatchNorm1d(out_channel))
+            self.mlp_layers.append(nn.Sequential(
+                nn.Conv1d(last_channel, out_channel, 1),
+                nn.BatchNorm1d(out_channel),
+                nn.ReLU(inplace=True)  # 在同一个模块中直接添加ReLU激活函数
+            ))
             last_channel = out_channel
 
     def forward(self, xyz1, xyz2, points1, points2):
@@ -309,8 +347,14 @@ class PointNetFeaturePropagation(nn.Module):
             new_points = interpolated_points
 
         new_points = new_points.permute(0, 2, 1)
-        for i, conv in enumerate(self.mlp_convs):
-            bn = self.mlp_bns[i]
-            new_points = F.relu(bn(conv(new_points)))
+
+        # for i, conv in enumerate(self.mlp_convs):
+        #     bn = self.mlp_bns[i]
+        #     new_points = F.relu(bn(conv(new_points)))
+
+        # 在forward中按顺序应用MLP层
+        for mlp_layer in self.mlp_layers:
+            new_points = mlp_layer(new_points)
+
         return new_points
 
