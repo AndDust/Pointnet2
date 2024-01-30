@@ -8,6 +8,9 @@ def timeit(tag, t):
     print("{}: {}s".format(tag, time() - t))
     return time()
 
+"""
+    归一化点云，使用以centroid为中心的坐标，球半径为1
+"""
 def pc_normalize(pc):
     l = pc.shape[0]
     centroid = np.mean(pc, axis=0)
@@ -16,6 +19,12 @@ def pc_normalize(pc):
     pc = pc / m
     return pc
 
+"""
+    square_distance函数用来再ball_query过程中确定每一个点距离采样点的距离
+    函数输入是两组点，N为第一组点src的个数，M为第二组点dst的个数，C为输入点的通道数（如果是xyz时C=3）
+    函数返回的是两组点两两之间的欧几里得距离，即NxM的矩阵
+    在训练中数据以minin-bnatch的形式输入，所以一个batch数量的维度为B
+"""
 def square_distance(src, dst):
     """
     Calculate Euclid distance between each two points.
@@ -157,7 +166,11 @@ def sample_and_group_all(xyz, points):
         new_points = grouped_xyz
     return new_xyz, new_points
 
-
+"""
+    npoint=128, radius=0.4, nsample=64, in_channel=128+3, mlp=[128,128,256], group_all=True
+    128= npoint, 就是中心点centriod的个数,最远点采样的点数
+    
+"""
 class PointNetSetAbstraction(nn.Module):
     def __init__(self, npoint, radius, nsample, in_channel, mlp, group_all):
         super(PointNetSetAbstraction, self).__init__()
@@ -195,7 +208,7 @@ class PointNetSetAbstraction(nn.Module):
         xyz = xyz.permute(0, 2, 1)
         if points is not None:
             points = points.permute(0, 2, 1)
-
+        """形成局部的group"""
         if self.group_all:
             new_xyz, new_points = sample_and_group_all(xyz, points)
         else:
@@ -204,6 +217,12 @@ class PointNetSetAbstraction(nn.Module):
         # new_points: sampled points data, [B, npoint, nsample, C+D]
         new_points = new_points.permute(0, 3, 2, 1) # [B, C+D, nsample,npoint]
 
+        """
+            以下是pointnet操作
+            对局部group中的每一个点做MLP操作
+            利用1x1的2d卷积相当于把每个group当成一个通道，共npoint个通道
+            对[C+D, nsample]的维度上做逐像素的卷积，结果相当于对单个C+D维度做1d的卷积
+        """
         # for i, conv in enumerate(self.mlp_convs):
         #     bn = self.mlp_bns[i]
         #     new_points =  F.relu(bn(conv(new_points)))
@@ -211,11 +230,16 @@ class PointNetSetAbstraction(nn.Module):
         for mlp_layer in self.mlp_layers:
             new_points = mlp_layer(new_points)
 
+        """最后进行局部的最大池化， 得到局部的全局特征"""
         new_points = torch.max(new_points, 2)[0]
         new_xyz = new_xyz.permute(0, 2, 1)
         return new_xyz, new_points
 
-
+"""
+    PointNetSetAbstractionMSG类实现MSG方法的SetAbstraction:
+    这里radius_list输入的是一个list,例如[0.1, 0.2, 0.4]
+    对于不同的半径做ball_query，将不同半径下的点云特征保存在new_points_list中，最后再拼接到一起
+"""
 class PointNetSetAbstractionMsg(nn.Module):
     def __init__(self, npoint, radius_list, nsample_list, in_channel, mlp_list):
         super(PointNetSetAbstractionMsg, self).__init__()
@@ -261,15 +285,20 @@ class PointNetSetAbstractionMsg(nn.Module):
 
         B, N, C = xyz.shape
         S = self.npoint
+        """最远点采样"""
         new_xyz = index_points(xyz, farthest_point_sample(xyz, S))
+        """将不同半径下的点云特征保存在new_points_list"""
         new_points_list = []
         for i, radius in enumerate(self.radius_list):
             K = self.nsample_list[i]
+            """query_ball_point函数用于寻找球形邻域中的点"""
             group_idx = query_ball_point(radius, K, xyz, new_xyz)
+            """按照输入的点云数据和索引返回索引的点云数据"""
             grouped_xyz = index_points(xyz, group_idx)
             grouped_xyz -= new_xyz.view(B, S, 1, C)
             if points is not None:
                 grouped_points = index_points(points, group_idx)
+                """拼接点特征数据和点坐标数据"""
                 grouped_points = torch.cat([grouped_points, grouped_xyz], dim=-1)
             else:
                 grouped_points = grouped_xyz
@@ -283,14 +312,22 @@ class PointNetSetAbstractionMsg(nn.Module):
             for conv_bn_block in self.conv_blocks[i]:
                 grouped_points = conv_bn_block(grouped_points)
 
+            """最大池化，获得局部区域的全局特征"""
             new_points = torch.max(grouped_points, 2)[0]  # [B, D', S]
+            """不同半径下的点云特征的列表"""
             new_points_list.append(new_points)
 
         new_xyz = new_xyz.permute(0, 2, 1)
+        """拼接不同半径下的点云特征"""
         new_points_concat = torch.cat(new_points_list, dim=1)
         return new_xyz, new_points_concat
 
-
+"""
+    FeaturePropagation的实现主要通过线性插值和MLP完成
+    当点的个数只有一个的时候，采用repeat直接复制成N个点
+    当点的个数大于一个的时候，采用线性插值的方式进行上采样
+    拼接上下采样对应点的SA层的特征，再对拼接后的每一个点都做一个MLP
+"""
 class PointNetFeaturePropagation(nn.Module):
     def __init__(self, in_channel, mlp):
         super(PointNetFeaturePropagation, self).__init__()
