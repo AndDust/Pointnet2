@@ -275,7 +275,7 @@ def main(args):
             if mIoU >= best_iou:
                 best_iou = mIoU
                 logger.info('Save model...')
-                savepath = str(checkpoints_dir) + '/best_model.pth'
+                savepath = str(checkpoints_dir) + '/best_model_reorganized.pth'
                 log_string('Saving at %s' % savepath)
                 state = {
                     'epoch': epoch,
