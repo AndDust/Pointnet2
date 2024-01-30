@@ -92,7 +92,11 @@ def farthest_point_sample(xyz, npoint):
         farthest = torch.max(distance, -1)[1]
     return centroids
 
-
+"""
+   query_ball_point函数用于寻找球形邻域中的点
+   输入中radius为球形邻域的半径，xyz为所有的点云数据
+   输出为每个样本的每个球形邻域的nsample个采样点集的索引[B, S, nsample]
+"""
 def query_ball_point(radius, nsample, xyz, new_xyz):
     """
     Input:
@@ -115,7 +119,12 @@ def query_ball_point(radius, nsample, xyz, new_xyz):
     group_idx[mask] = group_first[mask]
     return group_idx
 
-
+"""
+    Sampling + Grouping主要用于将整个点云分散成局部的group
+    对每一个group都可以用Pointnet单独地提取局部的特征
+    Sampling + Groupping分成了sample_and_group和sample_and_group_all两个函数
+    其区别在于sample_and_group_all直接将所有点作为一个group
+"""
 def sample_and_group(npoint, radius, nsample, xyz, points, returnfps=False):
     """
     Input:
