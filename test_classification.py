@@ -12,6 +12,8 @@ from tqdm import tqdm
 import sys
 import importlib
 
+from quant import get_qnn_model
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = BASE_DIR
 sys.path.append(os.path.join(ROOT_DIR, 'models'))
@@ -105,8 +107,10 @@ def main(args):
     checkpoint = torch.load(str(experiment_dir) + '/checkpoints/best_model_reorganized.pth')
     classifier.load_state_dict(checkpoint['model_state_dict'])
 
+    qnn = get_qnn_model.get_quant_model(classifier)
+
     with torch.no_grad():
-        instance_acc, class_acc = test(classifier.eval(), testDataLoader, vote_num=args.num_votes, num_class=num_class)
+        instance_acc, class_acc = test(qnn.eval(), testDataLoader, vote_num=args.num_votes, num_class=num_class)
         log_string('Test Instance Accuracy: %f, Class Accuracy: %f' % (instance_acc, class_acc))
 
 
