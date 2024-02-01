@@ -15,6 +15,8 @@ from tqdm import tqdm
 import provider
 import numpy as np
 
+from quant.get_qnn_model import get_qnn_model
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = BASE_DIR
 sys.path.append(os.path.join(ROOT_DIR, 'models'))
@@ -34,10 +36,22 @@ def parse_args():
     parser.add_argument('--batch_size', type=int, default=32, help='batch size in testing [default: 32]')
     parser.add_argument('--gpu', type=str, default='0', help='specify gpu device')
     parser.add_argument('--num_point', type=int, default=4096, help='point number [default: 4096]')
-    parser.add_argument('--log_dir', type=str, default="pointnet2_sem_seg", help='experiment root')
+    parser.add_argument('--log_dir', type=str, default="pointnet2_sem_seg_reorganized", help='experiment root')
     parser.add_argument('--visual', action='store_true', default=False, help='visualize result [default: False]')
     parser.add_argument('--test_area', type=int, default=5, help='area for testing, option: 1-6 [default: 5]')
     parser.add_argument('--num_votes', type=int, default=3, help='aggregate segmentation scores with voting [default: 5]')
+
+    # TODO 新增量化参数
+    parser.add_argument('--n_bits_w', default=8, type=int, help='bitwidth for weight quantization')
+    parser.add_argument('--channel_wise', default=True, help='apply channel_wise quantization for weights')
+    parser.add_argument('--n_bits_a', default=8, type=int, help='bitwidth for activation quantization')
+    parser.add_argument('--disable_8bit_head_stem', action='store_true')
+    parser.add_argument('--init_wmode', default='mse', type=str, choices=['minmax', 'mse', 'minmax_scale'],
+                        help='init opt mode for weight')
+    parser.add_argument('--init_amode', default='mse', type=str, choices=['minmax', 'mse', 'minmax_scale'],
+                        help='init opt mode for activation')
+    parser.add_argument('--prob', default=0.5, type=float)
+
     return parser.parse_args()
 
 
@@ -90,7 +104,17 @@ def main(args):
     classifier = MODEL.get_model(NUM_CLASSES).cuda()
     checkpoint = torch.load(str(experiment_dir) + '/checkpoints/best_model_reorganized.pth')
     classifier.load_state_dict(checkpoint['model_state_dict'])
-    classifier = classifier.eval()
+
+    if args.enable_quant:
+        test_model = get_qnn_model(args, classifier)
+        print("+++++++++使用量化模型进行【场景语义分割】测试+++++++++")
+    else:
+        test_model = classifier
+        print("+++++++++使用原始模型进行【场景语义分割】测试+++++++++")
+
+    print("【使用的场景语义分割测试Model】:{}".format(args.log_dir))
+
+    test_model = test_model.eval()
 
     with torch.no_grad():
         scene_id = TEST_DATASET_WHOLE_SCENE.file_list
@@ -138,7 +162,7 @@ def main(args):
                     torch_data = torch.Tensor(batch_data)
                     torch_data = torch_data.float().cuda()
                     torch_data = torch_data.transpose(2, 1)
-                    seg_pred, _ = classifier(torch_data)
+                    seg_pred, _ = test_model(torch_data)
                     batch_pred_label = seg_pred.contiguous().cpu().data.max(2)[1].numpy()
 
                     vote_label_pool = add_vote(vote_label_pool, batch_point_index[0:real_batch_size, ...],

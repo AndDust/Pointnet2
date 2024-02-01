@@ -12,6 +12,8 @@ import importlib
 from tqdm import tqdm
 import numpy as np
 
+from quant.get_qnn_model import get_qnn_model
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = BASE_DIR
 sys.path.append(os.path.join(ROOT_DIR, 'models'))
@@ -41,9 +43,21 @@ def parse_args():
     parser.add_argument('--batch_size', type=int, default=24, help='batch size in testing')
     parser.add_argument('--gpu', type=str, default='0', help='specify gpu device')
     parser.add_argument('--num_point', type=int, default=2048, help='point Number')
-    parser.add_argument('--log_dir', type=str, default="pointnet2_part_seg_msg", help='experiment root')
+    parser.add_argument('--log_dir', type=str, default="pointnet2_part_seg_msg_reorganized", help='experiment root')
     parser.add_argument('--normal', action='store_true', default=False, help='use normals')
     parser.add_argument('--num_votes', type=int, default=3, help='aggregate segmentation scores with voting')
+
+    # TODO 新增量化参数
+    parser.add_argument('--n_bits_w', default=8, type=int, help='bitwidth for weight quantization')
+    parser.add_argument('--channel_wise', default=True, help='apply channel_wise quantization for weights')
+    parser.add_argument('--n_bits_a', default=8, type=int, help='bitwidth for activation quantization')
+    parser.add_argument('--disable_8bit_head_stem', action='store_true')
+    parser.add_argument('--init_wmode', default='mse', type=str, choices=['minmax', 'mse', 'minmax_scale'],
+                        help='init opt mode for weight')
+    parser.add_argument('--init_amode', default='mse', type=str, choices=['minmax', 'mse', 'minmax_scale'],
+                        help='init opt mode for activation')
+    parser.add_argument('--prob', default=0.5, type=float)
+
     return parser.parse_args()
 
 
@@ -83,6 +97,15 @@ def main(args):
     checkpoint = torch.load(str(experiment_dir) + '/checkpoints/best_model_reorganized.pth')
     classifier.load_state_dict(checkpoint['model_state_dict'])
 
+    if args.enable_quant:
+        test_model = get_qnn_model(args, classifier)
+        print("+++++++++使用量化模型进行【部件分割】测试+++++++++")
+    else:
+        test_model = classifier
+        print("+++++++++使用原始模型进行【部件分割】测试+++++++++")
+
+    print("【使用的部件分割测试Model】:{} \n 【是否使用法向量信息】：{}".format(args.log_dir, args.normal))
+
     with torch.no_grad():
         test_metrics = {}
         total_correct = 0
@@ -96,7 +119,7 @@ def main(args):
             for label in seg_classes[cat]:
                 seg_label_to_cat[label] = cat
 
-        classifier = classifier.eval()
+        test_model = test_model.eval()
         for batch_id, (points, label, target) in tqdm(enumerate(testDataLoader), total=len(testDataLoader),
                                                       smoothing=0.9):
             batchsize, num_point, _ = points.size()
@@ -106,7 +129,7 @@ def main(args):
             vote_pool = torch.zeros(target.size()[0], target.size()[1], num_part).cuda()
 
             for _ in range(args.num_votes):
-                seg_pred, _ = classifier(points, to_categorical(label, num_classes))
+                seg_pred, _ = test_model(points, to_categorical(label, num_classes))
                 vote_pool += seg_pred
 
             seg_pred = vote_pool / args.num_votes

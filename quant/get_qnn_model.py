@@ -9,23 +9,23 @@ from quant import (
 
 import torch.nn as nn
 import copy
-import argparse
-
-parser = argparse.ArgumentParser(description='arg parser')
-
-# TODO 新增量化参数
-parser.add_argument('--n_bits_w', default=8, type=int, help='bitwidth for weight quantization')
-parser.add_argument('--channel_wise', default=True, help='apply channel_wise quantization for weights')
-parser.add_argument('--n_bits_a', default=8, type=int, help='bitwidth for activation quantization')
-parser.add_argument('--disable_8bit_head_stem', action='store_true')
-
-parser.add_argument('--init_wmode', default='mse', type=str, choices=['minmax', 'mse', 'minmax_scale'],
-                    help='init opt mode for weight')
-parser.add_argument('--init_amode', default='mse', type=str, choices=['minmax', 'mse', 'minmax_scale'],
-                    help='init opt mode for activation')
-parser.add_argument('--prob', default=0.5, type=float)
-
-args = parser.parse_args()
+# import argparse
+#
+# parser = argparse.ArgumentParser(description='arg parser')
+#
+# # TODO 新增量化参数
+# parser.add_argument('--n_bits_w', default=8, type=int, help='bitwidth for weight quantization')
+# parser.add_argument('--channel_wise', default=True, help='apply channel_wise quantization for weights')
+# parser.add_argument('--n_bits_a', default=8, type=int, help='bitwidth for activation quantization')
+# parser.add_argument('--disable_8bit_head_stem', action='store_true')
+#
+# parser.add_argument('--init_wmode', default='mse', type=str, choices=['minmax', 'mse', 'minmax_scale'],
+#                     help='init opt mode for weight')
+# parser.add_argument('--init_amode', default='mse', type=str, choices=['minmax', 'mse', 'minmax_scale'],
+#                     help='init opt mode for activation')
+# parser.add_argument('--prob', default=0.5, type=float)
+#
+# args = parser.parse_args()
 
 def get_qnn_model(qnn_args, origin_model):
     # TODO 加载模型
@@ -129,5 +129,5 @@ def get_qnn_model(qnn_args, origin_model):
 
     return qnn
 
-def get_quant_model(origin_model):
-    return get_qnn_model(args, origin_model)
+# def get_quant_model(origin_model):
+#     return get_qnn_model(args, origin_model)

@@ -12,7 +12,7 @@ from tqdm import tqdm
 import sys
 import importlib
 
-from quant import get_qnn_model
+from quant.get_qnn_model import get_qnn_model
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = BASE_DIR
@@ -27,10 +27,24 @@ def parse_args():
     parser.add_argument('--batch_size', type=int, default=24, help='batch size in training')
     parser.add_argument('--num_category', default=40, type=int, choices=[10, 40],  help='training on ModelNet10/40')
     parser.add_argument('--num_point', type=int, default=1024, help='Point Number')
-    parser.add_argument('--log_dir', type=str, default="pointnet2_cls_ssg", help='Experiment root')
+    parser.add_argument('--log_dir', type=str, default="pointnet2_cls_ssg_reorganized", help='Experiment root')
     parser.add_argument('--use_normals', action='store_true', default=False, help='use normals')
     parser.add_argument('--use_uniform_sample', action='store_true', default=False, help='use uniform sampiling')
     parser.add_argument('--num_votes', type=int, default=3, help='Aggregate classification scores with voting')
+
+    parser.add_argument('--enable_quant', action='store_true', default=False, help='enable quant or not in test')
+
+    # TODO 新增量化参数
+    parser.add_argument('--n_bits_w', default=8, type=int, help='bitwidth for weight quantization')
+    parser.add_argument('--channel_wise', default=True, help='apply channel_wise quantization for weights')
+    parser.add_argument('--n_bits_a', default=8, type=int, help='bitwidth for activation quantization')
+    parser.add_argument('--disable_8bit_head_stem', action='store_true')
+    parser.add_argument('--init_wmode', default='mse', type=str, choices=['minmax', 'mse', 'minmax_scale'],
+                        help='init opt mode for weight')
+    parser.add_argument('--init_amode', default='mse', type=str, choices=['minmax', 'mse', 'minmax_scale'],
+                        help='init opt mode for activation')
+    parser.add_argument('--prob', default=0.5, type=float)
+
     return parser.parse_args()
 
 
@@ -107,10 +121,17 @@ def main(args):
     checkpoint = torch.load(str(experiment_dir) + '/checkpoints/best_model_reorganized.pth')
     classifier.load_state_dict(checkpoint['model_state_dict'])
 
-    qnn = get_qnn_model.get_quant_model(classifier)
+    if args.enable_quant:
+        test_model = get_qnn_model(args, classifier)
+        print("+++++++++使用量化模型进行【形状分类】测试+++++++++")
+    else:
+        test_model = classifier
+        print("+++++++++使用原始模型进行【形状分类】测试+++++++++")
+
+    print("【使用的分类测试Model】:{} \n 【是否使用法向量信息】：{}".format(args.log_dir, args.use_normals))
 
     with torch.no_grad():
-        instance_acc, class_acc = test(qnn.eval(), testDataLoader, vote_num=args.num_votes, num_class=num_class)
+        instance_acc, class_acc = test(test_model.eval(), testDataLoader, vote_num=args.num_votes, num_class=num_class)
         log_string('Test Instance Accuracy: %f, Class Accuracy: %f' % (instance_acc, class_acc))
 
 
