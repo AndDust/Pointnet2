@@ -96,6 +96,10 @@ def farthest_point_sample(xyz, npoint):
    query_ball_point函数用于寻找球形邻域中的点
    输入中radius为球形邻域的半径，xyz为所有的点云数据
    输出为每个样本的每个球形邻域的nsample个采样点集的索引[B, S, nsample]
+   
+   query_ball_point函数用于寻找球形领域中的点。输入中radius为球形领域的半径，nsample为每个领域中要采样的点，
+   new_xyz为S个球形领域的中心（由最远点采样在前面得出），xyz为所有的点云；
+   输出为每个样本的每个球形领域的nsample个采样点集的索引[B,S,nsample]
 """
 def query_ball_point(radius, nsample, xyz, new_xyz):
     """

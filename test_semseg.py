@@ -41,6 +41,8 @@ def parse_args():
     parser.add_argument('--test_area', type=int, default=5, help='area for testing, option: 1-6 [default: 5]')
     parser.add_argument('--num_votes', type=int, default=3, help='aggregate segmentation scores with voting [default: 5]')
 
+    parser.add_argument('--enable_quant', action='store_true', default=False, help='enable quant or not in test')
+
     # TODO 新增量化参数
     parser.add_argument('--n_bits_w', default=8, type=int, help='bitwidth for weight quantization')
     parser.add_argument('--channel_wise', default=True, help='apply channel_wise quantization for weights')
