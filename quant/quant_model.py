@@ -212,8 +212,18 @@ class QuantModel(nn.Module):
                 m.set_quant_state(weight_quant, act_quant)
 
     """FP_model的前向传播"""
-    def forward(self, input):
-        return self.model(input)
+
+    """
+        pointnet++部件分割模型需要传递两个参数
+        这里参数传递使用*args以通用
+    """
+    # def forward(self, input):
+    #     return self.model(input)
+    # def forward(self, input, another):
+    #     return self.model(input, another)
+
+    def forward(self, *args):
+        return self.model(*args)
 
     def set_first_last_layer_to_8bit(self):
         w_list, a_list = [], []
