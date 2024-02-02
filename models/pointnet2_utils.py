@@ -209,6 +209,11 @@ class PointNetSetAbstraction(nn.Module):
 
         self.group_all = group_all
 
+    """
+        返回值：
+        new_xyz： 采样点位置数据
+        new_points: 采样点的特征数据
+    """
     def forward(self, xyz, points):
         """
         Input:
@@ -249,6 +254,8 @@ class PointNetSetAbstraction(nn.Module):
         return new_xyz, new_points
 
 """
+    对于非均匀点来说还有一个MSG方法：
+    
     PointNetSetAbstractionMSG类实现MSG方法的SetAbstraction:
     这里radius_list输入的是一个list,例如[0.1, 0.2, 0.4]
     对于不同的半径做ball_query，将不同半径下的点云特征保存在new_points_list中，最后再拼接到一起
