@@ -11,6 +11,7 @@ import sys
 import importlib
 from tqdm import tqdm
 import numpy as np
+import random
 
 from quant.get_qnn_model import get_qnn_model
 
@@ -60,7 +61,18 @@ def parse_args():
                         help='init opt mode for activation')
     parser.add_argument('--prob', default=0.5, type=float)
 
-    return parser.parse_args()
+    parser.add_argument('--rand_seed', type=int, default=1024, help='random seed')
+
+    args = parser.parse_args()
+
+    """ 固定随机种子 """
+    random.seed(args.rand_seed)
+    np.random.seed(args.rand_seed)
+    torch.manual_seed(args.rand_seed)
+    torch.cuda.manual_seed(args.rand_seed)
+    torch.backends.cudnn.deterministic = True
+
+    return args
 
 
 def main(args):
