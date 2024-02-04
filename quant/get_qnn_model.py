@@ -91,10 +91,10 @@ def get_qnn_model(qnn_args, origin_model):
                 传入完整的qnn、fp_model和当前的module、fp_module
             """
             # layer_reconstruction(qnn, fp_model, module, fp_module, **kwargs)
-            layer_reconstruction(module)
+            layer_reconstruction(module, qnn_args.num_std)
         elif isinstance(module, BaseQuantBlock):
             # block_reconstruction(qnn, fp_model, module, fp_module, **kwargs)
-            block_reconstruction(module)
+            block_reconstruction(module, qnn_args.num_std)
         else:
             raise NotImplementedError
 

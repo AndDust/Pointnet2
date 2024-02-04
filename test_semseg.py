@@ -56,6 +56,7 @@ def parse_args():
     parser.add_argument('--prob', default=0.5, type=float)
 
     parser.add_argument('--rand_seed', type=int, default=1024, help='random seed')
+    parser.add_argument('--num_std', type=int, default=4, help='the number of standard deviation for estimating range')
 
     args = parser.parse_args()
 
@@ -122,6 +123,7 @@ def main(args):
     if args.enable_quant:
         test_model = get_qnn_model(args, classifier)
         print("+++++++++使用量化模型进行【场景语义分割】测试+++++++++")
+        print("【使用{}倍的标准差来估计数据范围】".format(args.num_std))
     else:
         test_model = classifier
         print("+++++++++使用原始模型进行【场景语义分割】测试+++++++++")
